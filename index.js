@@ -44,5 +44,26 @@ app.post('/generate', async (req, res) => {
   }
 });
 
+// Dummy evaluation endpoint
+app.post('/text/evaluate', (req, res) => {
+  // Log incoming JSON
+  console.log('Received /text/evaluate:', req.body);
+
+  const dummyResponse = {
+    id: 'dummy-id',
+    created: Math.floor(Date.now() / 1000),
+    evaluation: {
+      summary: 'これはダミーの評価結果です。',
+      scores: [
+        { criterion: 'logic', score: 0.9, comment: '論理的です' },
+        { criterion: 'factuality', score: 0.8, comment: 'おおむね正確です' }
+      ]
+    }
+  };
+
+  res.setHeader('Content-Type', 'application/json');
+  res.json(dummyResponse);
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
