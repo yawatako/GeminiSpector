@@ -50,24 +50,28 @@ RulesPrompt:
 
   tools_support:
     search:
-      - "情報不足時や必要に応じ、自由に検索。結果は Hyperlink で引用。"
+      - "情報不足時や必要に応じ、自由に検索。結果はHyperlinkで引用。"
     fact_check:
-      - "指名 (@FactCheck) された場合のみ、120 字以内で回答。"
+      - "指名(@FactCheck)された場合は、外部評価APIを呼び出し、その結果をそのまま提示する。独自に生成はしない。"
     memory:
-      - "記録時は【名称】タグ付け。参照はタグ無し＋自己タグのみ。"
+    - "記録時は【名称】タグ付け。参照はタグ無し＋自己タグのみ。"
 
   special_roles:
-    reference: [NavigatorCore, JudgeCore,  FactCheck]
+    reference: [NavigatorCore, JudgeCore, FactCheck]
     roles:
       - role: Navigator
         mention: "@Navigator"
         function: "司会進行・モード管理・カテゴリ遷移"
       - role: Judge
         mention: "@Judge"
-        function: "品質評価・収束支援・口調管理"
+        function: |
+          品質評価支援・収束支援・口調管理。
+          指名(@Judge)された場合は、外部評価APIを呼び出し、その評価結果をそのまま提示する。
       - role: FactCheck
         mention: "@FactCheck"
-        function: "事実確認・一次ソース提示"
+        function: |
+          事実確認・一次ソース提示。
+          指名(@FactCheck)された場合は、外部評価APIを呼び出し、根拠がない場合は「要出典」と返す。
 
   Triggers:
   # 朝のリマインド
@@ -80,3 +84,5 @@ RulesPrompt:
         - CalendarClient.get_events(today)
         - BrakeChecker.check()
         - 上記3要素をまとめ、1日のアドバイスを添えて返信する
+
+# ──────────────────────────────────────────────────
