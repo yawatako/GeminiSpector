@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const fetch = require("node-fetch");
 const app = express();
 app.use(express.json());
 
@@ -7,7 +8,6 @@ app.use(express.json());
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
 
-// 使用するGeminiモデルを統一
 const MODEL = "gemini-2.5-pro";
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
@@ -16,11 +16,16 @@ const GEMINI_URL =
 /* ====== 2. 共通呼び出し関数 ====== */
 async function callGemini(prompt, { maxTokens, temperature } = {}) {
   const body = {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents: [
+      {
+        role: "user",            // ← 追加
+        parts: [{ text: prompt }]
+      }
+    ],
     generationConfig: {}
   };
-  if (maxTokens !== undefined)  body.generationConfig.maxOutputTokens = maxTokens;
-  if (temperature !== undefined) body.generationConfig.temperature   = temperature;
+  if (maxTokens   !== undefined) body.generationConfig.maxOutputTokens = maxTokens;
+  if (temperature !== undefined) body.generationConfig.temperature     = temperature;
 
   const res = await fetch(GEMINI_URL, {
     method: "POST",
@@ -30,7 +35,10 @@ async function callGemini(prompt, { maxTokens, temperature } = {}) {
 
   console.log("[Gemini] status =", res.status);
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+
+  const data = await res.json();
+  console.log("[Gemini] raw response =", JSON.stringify(data, null, 2));
+  return data;
 }
 
 /* ====== 3. /generate エンドポイント ====== */
@@ -39,15 +47,28 @@ app.post("/generate", async (req, res) => {
     const { prompt, max_tokens, temperature } = req.body;
     if (!prompt) return res.status(400).json({ error: "prompt required" });
 
-    const data  = await callGemini(prompt, {
+    const data = await callGemini(prompt, {
       maxTokens:   max_tokens,
       temperature: temperature
     });
-    const text  = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    return res.json({ text, raw: data });
+
+    // candidates がなければエラー
+    if (!data.candidates?.length) {
+      console.error("Invalid Gemini response:", data);
+      return res
+        .status(500)
+        .json({ error: "Invalid Gemini response: no candidates", raw: data });
+    }
+
+    // parts のテキストを結合
+    const text = data.candidates
+      .map(c => c.content.parts.map(p => p.text).join(""))
+      .join("\n");
+
+    res.json({ text, raw: data });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -64,7 +85,7 @@ function buildEvalPrompt(text, criteria) {
     "根拠が無い場合は『要出典』と答える。";
   const list = criteria.join(", ");
   return `${judge}\n${fact}\n評価基準: ${list}\n\n評価対象:\n${text}\n\n` +
-    `以下のJSON形式で回答してください。\n{\n  \"summary\": \"string\",\n  \"scores\": [{ \"criterion\": \"logic\", \"score\": 0, \"comment\": \"\" }]\n}`;
+    `以下のJSON形式で回答してください。\n{\n  "summary": "string",\n  "scores": [{ "criterion": "logic", "score": 0, "comment": "" }]\n}`;
 }
 
 app.post("/text/evaluate", async (req, res) => {
@@ -78,10 +99,9 @@ app.post("/text/evaluate", async (req, res) => {
     const match = rawText.match(/\{[\s\S]*\}/);
     if (!match) {
       console.error("Gemini response parse failed:", rawText);
-      return res.status(500).json({
-        error: "Gemini\u306E\u5fdc\u7b54\u304c\u89e3\u6790\u3067\u304d\u307e\u305b\u3093",
-        raw: rawText
-      });
+      return res
+        .status(500)
+        .json({ error: "Geminiの応答が解析できませんでした", raw: rawText });
     }
     const result = JSON.parse(match[0]);
     res.json(result);
