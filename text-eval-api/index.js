@@ -46,7 +46,13 @@ app.post('/text/evaluate', async (req, res) => {
     const data = await response.json();
     const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const match = textResp.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('Invalid Gemini response');
+    if (!match) {
+      console.error('Gemini response parse failed:', textResp);
+      return res.status(500).json({
+        error: 'Gemini\u306E\u5fdc\u7b54\u304c\u89e3\u6790\u3067\u304d\u307e\u305b\u3093',
+        raw: textResp,
+      });
+    }
     const result = JSON.parse(match[0]);
     res.json(result);
   } catch (err) {
