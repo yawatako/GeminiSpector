@@ -61,7 +61,7 @@ cp .env.example .env
 
 `.env`に以下を設定:
 OPENAI_API_KEY=sk-xxx
-GEMINI_API_KEY=ya29.xxx
+GEMINI_API_KEY=your_gemini_api_key
 3. 依存パッケージインストール
 npm install
 
