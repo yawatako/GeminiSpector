@@ -51,20 +51,38 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* ====== 4. /text/evaluate（ダミーのまま） ====== */
-app.post("/text/evaluate", (req, res) => {
-  console.log("Received /text/evaluate:", req.body);
-  res.json({
-    id: "dummy-id",
-    created: Math.floor(Date.now() / 1000),
-    evaluation: {
-      summary: "これはダミーの評価結果です。",
-      scores: [
-        { criterion: "logic",      score: 0.9, comment: "論理的です" },
-        { criterion: "factuality", score: 0.8, comment: "おおむね正確です" }
-      ]
-    }
-  });
+/* ====== 4. /text/evaluate ====== */
+const DEFAULT_CRITERIA = ["logic", "factuality", "creativity"];
+
+function buildEvalPrompt(text, criteria) {
+  const judge =
+    "システムトーン: analytic_brief\n" +
+    "評価プロファイル:\n  - logic\n  - factuality\n  - creativity\n  - empathy\n  - brevity\n" +
+    "総合点を0〜10で出し、各軸にコメントをつける。";
+  const fact =
+    "この文章の事実性を検証し、根拠を提示する。\n" +
+    "根拠が無い場合は『要出典』と答える。";
+  const list = criteria.join(", ");
+  return `${judge}\n${fact}\n評価基準: ${list}\n\n評価対象:\n${text}\n\n` +
+    `以下のJSON形式で回答してください。\n{\n  \"summary\": \"string\",\n  \"scores\": [{ \"criterion\": \"logic\", \"score\": 0, \"comment\": \"\" }]\n}`;
+}
+
+app.post("/text/evaluate", async (req, res) => {
+  const { text, criteria = DEFAULT_CRITERIA } = req.body;
+  if (!text) return res.status(400).json({ error: "text required" });
+
+  const prompt = buildEvalPrompt(text, criteria);
+  try {
+    const data = await callGemini(prompt, { maxTokens: 500, temperature: 0.3 });
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Invalid Gemini response");
+    const result = JSON.parse(match[0]);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ====== 5. 起動 ====== */

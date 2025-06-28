@@ -77,6 +77,10 @@ npm start
 - Gemini APIで外部検証を実施
 - 結果をユーザーに通知・表示
 
+### APIエンドポイント
+ - **POST /generate** : 指定した`prompt`からテキストを生成します。
+ - **POST /text/evaluate** : 文章を指定の観点で評価します。
+
 ---
 
 ## 📖 ドキュメント
