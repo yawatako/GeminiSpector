@@ -1,8 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
-
-console.log("GEMINI_API_KEY head:", (process.env.GEMINI_API_KEY || "").slice(0, 5));
+// index.js か server.js の fetch 部分
+const model = "models/gemini-2.5-flash";               // ✔ モデル名を確定
+const url   = `https://generativelanguage.googleapis.com/v1beta/2.5-flash:generateContent` +
+              `?key=${process.env.GEMINI_API_KEY}`;
 
 const app = express();
 app.use(express.json());
