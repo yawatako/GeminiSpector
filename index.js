@@ -7,7 +7,8 @@ app.use(express.json());
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
 
-const MODEL = "gemini-2.5-flash";  // 高速版。精度優先なら "gemini-2.5-pro"
+// 使用するGeminiモデルを統一
+const MODEL = "gemini-2.5-pro";
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
   `?key=${GEMINI_API_KEY}`;

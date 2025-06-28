@@ -26,7 +26,7 @@ This agent relies solely on Google Gemini to produce, evaluate, and fact-check m
 
 ## Gemini API Usage
 **Endpoint:**
-POST https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent
 **Request Structure:**
 ```json
 {
