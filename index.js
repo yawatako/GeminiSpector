@@ -1,77 +1,71 @@
-require('dotenv').config();
-const express = require('express');
-const fetch = require('node-fetch');
-// index.js か server.js の fetch 部分
-const model = "models/gemini-2.5-flash";               // ✔ モデル名を確定
-const url   = `https://generativelanguage.googleapis.com/v1beta/2.5-flash:generateContent` +
-              `?key=${process.env.GEMINI_API_KEY}`;
-
+require("dotenv").config();
+const express = require("express");
 const app = express();
 app.use(express.json());
 
-// Simple CORS support
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
-
+/* ====== 1. 定数まわり ====== */
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
 
-app.post('/generate', async (req, res) => {
-  const { prompt, max_tokens, temperature } = req.body;
-  if (!prompt) {
-    return res.status(400).json({ error: 'prompt required' });
-  }
+const MODEL = "gemini-2.5-flash";  // 高速版。精度優先なら "gemini-2.5-pro"
+const GEMINI_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
+  `?key=${GEMINI_API_KEY}`;
 
+/* ====== 2. 共通呼び出し関数 ====== */
+async function callGemini(prompt, { maxTokens, temperature } = {}) {
   const body = {
-    contents: [{ parts: [{ text: prompt }] }]
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {}
   };
-  if (max_tokens !== undefined || temperature !== undefined) {
-    body.generationConfig = {};
-    if (max_tokens !== undefined) body.generationConfig.maxOutputTokens = max_tokens;
-    if (temperature !== undefined) body.generationConfig.temperature = temperature;
-  }
+  if (maxTokens !== undefined)  body.generationConfig.maxOutputTokens = maxTokens;
+  if (temperature !== undefined) body.generationConfig.temperature   = temperature;
 
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  console.log("[Gemini] status =", res.status);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/* ====== 3. /generate エンドポイント ====== */
+app.post("/generate", async (req, res) => {
   try {
-    const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const { prompt, max_tokens, temperature } = req.body;
+    if (!prompt) return res.status(400).json({ error: "prompt required" });
 
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return res.json({ text });
+    const data  = await callGemini(prompt, {
+      maxTokens:   max_tokens,
+      temperature: temperature
+    });
+    const text  = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    return res.json({ text, raw: data });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Failed to generate text' });
+    return res.status(500).json({ error: err.message });
   }
 });
 
-// Dummy evaluation endpoint
-app.post('/text/evaluate', (req, res) => {
-  // Log incoming JSON
-  console.log('Received /text/evaluate:', req.body);
-
-  const dummyResponse = {
-    id: 'dummy-id',
+/* ====== 4. /text/evaluate（ダミーのまま） ====== */
+app.post("/text/evaluate", (req, res) => {
+  console.log("Received /text/evaluate:", req.body);
+  res.json({
+    id: "dummy-id",
     created: Math.floor(Date.now() / 1000),
     evaluation: {
-      summary: 'これはダミーの評価結果です。',
+      summary: "これはダミーの評価結果です。",
       scores: [
-        { criterion: 'logic', score: 0.9, comment: '論理的です' },
-        { criterion: 'factuality', score: 0.8, comment: 'おおむね正確です' }
+        { criterion: "logic",      score: 0.9, comment: "論理的です" },
+        { criterion: "factuality", score: 0.8, comment: "おおむね正確です" }
       ]
     }
-  };
-
-  res.setHeader('Content-Type', 'application/json');
-  res.json(dummyResponse);
+  });
 });
 
-const PORT = process.env.PORT || 3000;
+/* ====== 5. 起動 ====== */
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
