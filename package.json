@@ -1,0 +1,20 @@
+{
+  "name": "geminispector",
+  "version": "1.0.0",
+  "description": "**多人格生成 + Gemini APIクロスチェックシステム**",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/main-app/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "node-fetch": "^2.7.0",
+    "openai": "^5.8.2"
+  }
+}
