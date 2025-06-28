@@ -96,6 +96,43 @@ function buildEvalPrompt(text, criteria) {
     `以下のJSON形式で回答してください。\n{\n  "summary": "string",\n  "scores": [{ "criterion": "logic", "score": 0, "comment": "" }]\n}`;
 }
 
+// 出力からJSON部分だけを抜き出すユーティリティ
+function extractJsonChunk(raw) {
+  // ```json などのフェンスを除去
+  let s = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
+
+  // 最初の { の位置
+  const start = s.indexOf("{");
+  if (start < 0) return null;
+
+  // 深さカウントで対応する } を探す
+  let depth = 0,
+    end = -1;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === "{") depth++;
+    else if (s[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+
+  // 閉じ括弧が不足している場合は補完
+  if (end < 0) {
+    end = s.length - 1;
+    while (depth-- > 0) s += "}";
+    end = s.length - 1;
+  }
+
+  let chunk = s.slice(start, end + 1);
+
+  // 末尾の余分なカンマを除去
+  chunk = chunk.replace(/,(\s*[}\]])/g, "$1");
+  return chunk;
+}
+
 app.post("/text/evaluate", async (req, res) => {
   const { text, criteria = DEFAULT_CRITERIA } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
@@ -106,30 +143,24 @@ app.post("/text/evaluate", async (req, res) => {
     const data = await callGemini(prompt, { maxTokens: 800, temperature: 0.3 });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    // 1) フェンスを削除
-    const cleaned = rawText
-      .replace(/```json\s*/g, "")
-      .replace(/```/g, "")
-      .trim();
-
-    // 2) JSON 部分を抜き出し
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) {
-      console.error("JSON chunk not found:", cleaned);
+    // JSON部分を抽出
+    const jsonChunk = extractJsonChunk(rawText);
+    if (!jsonChunk) {
+      console.error("JSON chunk not found:", rawText);
       return res
         .status(500)
-        .json({ error: "JSON 部分が見つかりませんでした", raw: cleaned });
+        .json({ error: "JSON 部分が見つかりませんでした", raw: rawText });
     }
 
-    // 3) パースして返却
+    // パースして返却
     try {
-      const result = JSON.parse(match[0]);
+      const result = JSON.parse(jsonChunk);
       return res.json(result);
     } catch (e) {
-      console.error("JSON parse error:", e, "\nchunk:\n", match[0]);
+      console.error("JSON parse error:", e, "\nchunk:\n", jsonChunk);
       return res
         .status(500)
-        .json({ error: "JSON parse error", details: e.message, raw: cleaned });
+        .json({ error: "JSON parse error", details: e.message, raw: rawText });
     }
   } catch (err) {
     console.error(err);

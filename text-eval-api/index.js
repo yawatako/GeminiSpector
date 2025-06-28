@@ -25,6 +25,32 @@ const buildPrompt = (text, criteria) => {
 }`;
 };
 
+// Geminiの返答からJSON部分だけ抽出するユーティリティ
+function extractJsonChunk(raw) {
+  let s = raw.replace(/```json\s*/g, '').replace(/```/g, '').trim();
+  const start = s.indexOf('{');
+  if (start < 0) return null;
+
+  let depth = 0, end = -1;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}') {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+
+  if (end < 0) {
+    end = s.length - 1;
+    while (depth-- > 0) s += '}';
+    end = s.length - 1;
+  }
+
+  let chunk = s.slice(start, end + 1);
+  chunk = chunk.replace(/,(\s*[}\]])/g, '$1');
+  return chunk;
+}
+
 app.post('/text/evaluate', async (req, res) => {
   const { text, criteria = ['logic', 'factuality', 'creativity'], model = 'gemini-2.5-flash' } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
@@ -49,15 +75,17 @@ app.post('/text/evaluate', async (req, res) => {
     });
     const data = await response.json();
     const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const match = textResp.match(/\{[\s\S]*\}/);
-    if (!match) {
+
+    const jsonChunk = extractJsonChunk(textResp);
+    if (!jsonChunk) {
       console.error('Gemini response parse failed:', textResp);
       return res.status(500).json({
-        error: 'Gemini\u306E\u5fdc\u7b54\u304c\u89e3\u6790\u3067\u304d\u307e\u305b\u3093',
+        error: 'JSON 部分が見つかりませんでした',
         raw: textResp,
       });
     }
-    const result = JSON.parse(match[0]);
+
+    const result = JSON.parse(jsonChunk);
     res.json(result);
   } catch (err) {
     console.error(err);
