@@ -30,10 +30,13 @@ app.post('/text/evaluate', async (req, res) => {
   if (!text) return res.status(400).json({ error: 'text required' });
 
   const prompt = buildPrompt(text, criteria);
-  const payload = { model, prompt, temperature: 0.3, max_tokens: 500 };
+  const payload = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
+  };
 
   try {
-    const response = await fetch('https://api.gemini.google.com/v1/text/generate', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -42,7 +45,7 @@ app.post('/text/evaluate', async (req, res) => {
       body: JSON.stringify(payload),
     });
     const data = await response.json();
-    const textResp = data.text || data.choices?.[0]?.text || '';
+    const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const match = textResp.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Invalid Gemini response');
     const result = JSON.parse(match[0]);

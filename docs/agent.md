@@ -26,15 +26,15 @@ This agent integrates OpenAI GPT-4.1 (primary generator) and Gemini (auxiliary e
 
 ## Gemini API Usage
 **Endpoint:**
-POST https://api.gemini.google.com/v1/text/generate
-
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent
 **Request Structure:**
 ```json
 {
-  "model": "gemini-2.5-pro",
-  "prompt": "<evaluation_prompt>",
-  "max_tokens": 500,
-  "temperature": 0.3
+  "contents": [{ "parts": [{ "text": "<evaluation_prompt>" }] }],
+  "generationConfig": {
+    "maxOutputTokens": 500,
+    "temperature": 0.3
+  }
 }
 ```
 
