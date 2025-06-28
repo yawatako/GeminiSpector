@@ -58,11 +58,10 @@ app.post('/api/chat', async (req, res) => {
     try {
       const judgePrompt = loadPrompt('judge_prompt.md');
       const geminiPayload = {
-        model: 'gemini-2.5-pro',
-        prompt: `${judgePrompt}\n${gptResponse}`,
-        temperature: 0.3,
+        contents: [{ parts: [{ text: `${judgePrompt}\n${gptResponse}` }] }],
+        generationConfig: { temperature: 0.3 },
       };
-      const geminiRes = await fetch('https://api.gemini.google.com/v1/text/generate', {
+      const geminiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +70,7 @@ app.post('/api/chat', async (req, res) => {
         body: JSON.stringify(geminiPayload),
       });
       const data = await geminiRes.json();
-      evaluation = data.choices?.[0]?.text?.trim() || null;
+      evaluation = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     } catch (err) {
       evaluation = `Gemini API error: ${err.message}`;
     }

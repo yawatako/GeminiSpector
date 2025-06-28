@@ -21,12 +21,17 @@ app.post('/generate', async (req, res) => {
     return res.status(400).json({ error: 'prompt required' });
   }
 
-  const body = { prompt };
-  if (max_tokens !== undefined) body.max_tokens = max_tokens;
-  if (temperature !== undefined) body.temperature = temperature;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+  if (max_tokens !== undefined || temperature !== undefined) {
+    body.generationConfig = {};
+    if (max_tokens !== undefined) body.generationConfig.maxOutputTokens = max_tokens;
+    if (temperature !== undefined) body.generationConfig.temperature = temperature;
+  }
 
   try {
-    const response = await fetch('https://api.gemini.google.com/v1/text/generate', {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -36,7 +41,7 @@ app.post('/generate', async (req, res) => {
     });
 
     const data = await response.json();
-    const text = data.text || data.choices?.[0]?.text || '';
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     return res.json({ text });
   } catch (err) {
     console.error(err);
