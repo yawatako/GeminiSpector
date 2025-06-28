@@ -40,6 +40,12 @@ async function callGemini(prompt, { maxTokens, temperature } = {}) {
 
   const data = await res.json();
   console.log("[Gemini] raw response =", JSON.stringify(data, null, 2));
+  const fin = data.candidates?.[0]?.finishReason;
+  if (fin === "MAX_TOKENS") {
+    console.warn(
+      "[Gemini] response truncated by MAX_TOKENS; consider increasing maxTokens"
+    );
+  }
   return data;
 }
 
@@ -96,17 +102,35 @@ app.post("/text/evaluate", async (req, res) => {
 
   const prompt = buildEvalPrompt(text, criteria);
   try {
-    const data = await callGemini(prompt, { maxTokens: 500, temperature: 0.3 });
+    // MAX_TOKENS で切られないように余裕を持って 800 トークンに
+    const data = await callGemini(prompt, { maxTokens: 800, temperature: 0.3 });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const match = rawText.match(/\{[\s\S]*\}/);
+
+    // 1) フェンスを削除
+    const cleaned = rawText
+      .replace(/```json\s*/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    // 2) JSON 部分を抜き出し
+    const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) {
-      console.error("Gemini response parse failed:", rawText);
+      console.error("JSON chunk not found:", cleaned);
       return res
         .status(500)
-        .json({ error: "Geminiの応答が解析できませんでした", raw: rawText });
+        .json({ error: "JSON 部分が見つかりませんでした", raw: cleaned });
     }
-    const result = JSON.parse(match[0]);
-    res.json(result);
+
+    // 3) パースして返却
+    try {
+      const result = JSON.parse(match[0]);
+      return res.json(result);
+    } catch (e) {
+      console.error("JSON parse error:", e, "\nchunk:\n", match[0]);
+      return res
+        .status(500)
+        .json({ error: "JSON parse error", details: e.message, raw: cleaned });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
