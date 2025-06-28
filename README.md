@@ -56,16 +56,19 @@
 git clone https://github.com/your-org/GeminiSpector.git
 cd GeminiSpector
 
-3. 環境変数を設定
+2. 環境変数を設定
 cp .env.example .env
 
 `.env`に以下を設定:
+OPENAI_API_KEY=sk-xxx
 GEMINI_API_KEY=ya29.xxx
-
 3. 依存パッケージインストール
 npm install
 
-4. デプロイ (Render.com推奨)
+4. サーバー起動
+npm start
+
+5. デプロイ (Render.com推奨)
 
 ---
 
