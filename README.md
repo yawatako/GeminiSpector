@@ -24,7 +24,7 @@
 
 -## ⚙️ 技術構成
 
-- **Google Gemini API (2.5 Pro)**（応答生成・評価）
+- **Google Gemini API (2.5 Flash)**（応答生成・評価）
 - **Render.com**（インフラ・デプロイ）
 - Node.js / Python（実装予定）
 

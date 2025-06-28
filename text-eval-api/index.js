@@ -26,18 +26,22 @@ const buildPrompt = (text, criteria) => {
 };
 
 app.post('/text/evaluate', async (req, res) => {
-  const { text, criteria = ['logic', 'factuality', 'creativity'], model = 'gemini-2.5-pro' } = req.body;
+  const { text, criteria = ['logic', 'factuality', 'creativity'], model = 'gemini-2.5-flash' } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
 
   const prompt = buildPrompt(text, criteria);
   const payload = {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 500 },
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 500,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
   };
 
   try {
     const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
