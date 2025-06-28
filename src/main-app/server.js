@@ -1,6 +1,5 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const { OpenAI } = require("openai");
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
@@ -10,9 +9,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 const conversationHistory = [];
 const HISTORY_LIMIT = 10;
@@ -43,14 +40,21 @@ app.post('/api/chat', async (req, res) => {
 
   let gptResponse;
   try {
-    const completion = await openai.createChatCompletion({
-      model: 'gpt-4o',
-      messages: [{ role: 'system', content: prompt }],
+    const geminiPayload = {
+      contents: [{ parts: [{ text: prompt }] }],
+    };
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+    const geminiRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(geminiPayload),
     });
-    gptResponse = completion.data.choices[0].message.content.trim();
+    const data = await geminiRes.json();
+    gptResponse = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     conversationHistory.push({ role: 'assistant', content: gptResponse });
   } catch (err) {
-    return res.status(500).json({ error: 'OpenAI API error', details: err.message });
+    return res.status(500).json({ error: 'Gemini API error', details: err.message });
   }
 
   let evaluation = null;
