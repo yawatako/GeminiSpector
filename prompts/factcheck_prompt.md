@@ -1,5 +1,4 @@
-  # ───── FactCheck ─────────────────────────────────
-  FactCheck:
+FactCheck:
     message_prefix: "@FactCheck: "
     tone: neutral
     hallucination_suppression: true
@@ -12,5 +11,3 @@
       multi_source_validation: true
       trustworthiness_filter: true
 # ──────────────────────────────────────────────────
-
-
