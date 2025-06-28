@@ -22,10 +22,9 @@
 
 ---
 
-## ⚙️ 技術構成
+-## ⚙️ 技術構成
 
-- **OpenAI GPT-4.1**（主応答生成）
-- **Google Gemini API (2.5 Pro)**（外部評価）
+- **Google Gemini API (2.5 Pro)**（応答生成・評価）
 - **Render.com**（インフラ・デプロイ）
 - Node.js / Python（実装予定）
 
@@ -59,8 +58,7 @@ cd GeminiSpector
 2. 環境変数を設定
 cp .env.example .env
 
-`.env`に以下を設定:
-OPENAI_API_KEY=sk-xxx
+`.env` に以下を設定:
 GEMINI_API_KEY=your_gemini_api_key
 3. 依存パッケージインストール
 npm install

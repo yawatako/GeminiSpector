@@ -1,7 +1,7 @@
 # agent.md - 三人格AIエージェント指示書
 
 ## Overview
-This agent integrates OpenAI GPT-4.1 (primary generator) and Gemini (auxiliary evaluator) to produce, evaluate, and fact-check multi-persona responses.
+This agent relies solely on Google Gemini to produce, evaluate, and fact-check multi-persona responses.
 
 ## Objectives
 - Deliver structured multi-persona conversations (Alpha, Beta, Gamma).
@@ -17,7 +17,7 @@ This agent integrates OpenAI GPT-4.1 (primary generator) and Gemini (auxiliary e
 - **FactCheck**: Verifier (factuality).
 
 ## Behavior Guidelines
-- Generate responses primarily via GPT-4.1.
+- Generate responses via Google Gemini.
 - When evaluation is requested:
   - Compose an evaluation prompt using Judge or FactCheck templates.
   - Send the prompt to Gemini API.
