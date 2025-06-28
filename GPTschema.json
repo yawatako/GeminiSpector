@@ -1,0 +1,161 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Gemini AI Text Generation API",
+    "version": "1.0.0",
+    "description": "API for generating text using Gemini AI models, compatible with OpenAI's schema."
+  },
+  "servers": [
+    {
+      "url": "https://api.gemini.google.com/v1"
+    }
+  ],
+  "paths": {
+    "/text/generate": {
+      "post": {
+        "summary": "Generate text using Gemini AI",
+        "description": "Generates text based on the provided prompt and parameters.",
+        "operationId": "generateText",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateTextRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful text generation response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters."
+          },
+          "500": {
+            "description": "Internal server error."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GenerateTextRequest": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The model to use for text generation, e.g., 'gemini-1.5-flash'."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The input text prompt to guide the model's output."
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "The maximum number of tokens to generate.",
+            "default": 500
+          },
+          "temperature": {
+            "type": "number",
+            "description": "Controls randomness; lower values make responses more deterministic.",
+            "default": 0.7,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "top_p": {
+            "type": "number",
+            "description": "Nucleus sampling, controlling diversity.",
+            "default": 0.9,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "stop": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A list of stop sequences that will halt text generation."
+          }
+        },
+        "required": ["model", "prompt"]
+      },
+      "GenerateTextResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for the response."
+          },
+          "object": {
+            "type": "string",
+            "description": "Type of response object (e.g., 'text')."
+          },
+          "created": {
+            "type": "integer",
+            "description": "Timestamp of response creation."
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "description": "Generated text output."
+                },
+                "index": {
+                  "type": "integer",
+                  "description": "Index of the generated choice."
+                },
+                "finish_reason": {
+                  "type": "string",
+                  "description": "Reason why generation stopped (e.g., 'stop', 'length')."
+                }
+              }
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": {
+                "type": "integer",
+                "description": "Number of tokens used in the prompt."
+              },
+              "completion_tokens": {
+                "type": "integer",
+                "description": "Number of tokens used in the completion."
+              },
+              "total_tokens": {
+                "type": "integer",
+                "description": "Total number of tokens used."
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "Bearer token required for authentication."
+      }
+    }
+  },
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ]
+}
