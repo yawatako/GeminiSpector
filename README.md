@@ -1,5 +1,4 @@
 # GeminiSpector
-# GeminiSpector
 
 **多人格生成 + Gemini APIクロスチェックシステム**
 
