@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
 
+console.log("GEMINI_API_KEY head:", (process.env.GEMINI_API_KEY || "").slice(0, 5));
+
 const app = express();
 app.use(express.json());
 
