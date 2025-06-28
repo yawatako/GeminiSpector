@@ -1,4 +1,4 @@
-JudgeCore_FactCheck:
+JudgeCore:
 
   Judge:
     system_tone: analytic_brief
