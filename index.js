@@ -8,7 +8,7 @@ app.use(express.json());
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set");
 
-const MODEL = "gemini-2.5-pro";
+const MODEL = "gemini-2.5-flash";
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
   `?key=${GEMINI_API_KEY}`;
@@ -22,7 +22,9 @@ async function callGemini(prompt, { maxTokens, temperature } = {}) {
         parts: [{ text: prompt }]
       }
     ],
-    generationConfig: {}
+    generationConfig: {
+      thinkingConfig: { thinkingBudget: 0 }
+    }
   };
   if (maxTokens   !== undefined) body.generationConfig.maxOutputTokens = maxTokens;
   if (temperature !== undefined) body.generationConfig.temperature     = temperature;

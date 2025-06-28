@@ -42,9 +42,10 @@ app.post('/api/chat', async (req, res) => {
   try {
     const geminiPayload = {
       contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
     };
     const url =
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
     const geminiRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -63,10 +64,13 @@ app.post('/api/chat', async (req, res) => {
       const judgePrompt = loadPrompt('judge_prompt.md');
       const geminiPayload = {
         contents: [{ parts: [{ text: `${judgePrompt}\n${gptResponse}` }] }],
-        generationConfig: { temperature: 0.3 },
+        generationConfig: {
+          temperature: 0.3,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       };
       const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
       const geminiRes = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

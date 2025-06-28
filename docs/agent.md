@@ -26,14 +26,15 @@ This agent relies solely on Google Gemini to produce, evaluate, and fact-check m
 
 ## Gemini API Usage
 **Endpoint:**
-POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent
+POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
 **Request Structure:**
 ```json
 {
   "contents": [{ "parts": [{ "text": "<evaluation_prompt>" }] }],
   "generationConfig": {
     "maxOutputTokens": 500,
-    "temperature": 0.3
+    "temperature": 0.3,
+    "thinkingConfig": { "thinkingBudget": 0 }
   }
 }
 ```
