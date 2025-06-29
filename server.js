@@ -27,13 +27,13 @@ app.post('/api/chat', async (req, res) => {
 
   const prompt = `${rulesPrompt}\n${personas}\nユーザー: ${message}`;
   try {
-    const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { thinkingConfig: { thinkingBudget: 0 } } };
+    const payload = { contents: [{ parts: [{ text: prompt }] }] };
     const resp = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await resp.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     if (!evaluate) return res.json({ reply });
 
-    const evalPayload = { contents: [{ parts: [{ text: `${judgePrompt}\n${reply}` }] }], generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } };
+    const evalPayload = { contents: [{ parts: [{ text: `${judgePrompt}\n${reply}` }] }], generationConfig: { temperature: 0.3 } };
     const evalResp = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(evalPayload) });
     const evalData = await evalResp.json();
     const evaluation = evalData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
