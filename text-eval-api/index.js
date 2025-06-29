@@ -17,14 +17,26 @@ app.use((req, res, next) => {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Helper to build prompt
-const buildPrompt = (text, criteria) => {
-  const judge = `システムトーン: analytic_brief\n評価プロファイル:\n  - logic\n  - factuality\n  - creativity\n  - empathy\n  - brevity\n総合点を0〜10で出し、各軸にコメントをつける。`;
-  const fact = `この文章の事実性を検証し、根拠を提示する。\n根拠が無い場合は「要出典」と答える。`;
-  const criteriaList = criteria.join(', ');
-  return `${judge}\n${fact}\n評価基準: ${criteriaList}\n\n評価対象:\n${text}\n\n以下のJSON形式で回答してください。\n{\n  \"summary\": \"string\",\n  \"scores\": [{ \"criterion\": \"logic\", \"score\": 0, \"comment\": \"\" }]
-}`;
-};
 
+const buildPrompt = (text, criteria) => {
+  const judge =
+    "システムトーン: analytic_brief\n" +
+    "評価プロファイル:\n  - logic\n  - factuality\n  - creativity\n  - empathy\n  - brevity\n" +
+    "総合点を0〜10で出し、各軸にコメントをつける。";
+  const fact =
+    "この文章の事実性を検証し、根拠を提示する。\n" +
+    "根拠が無い場合は『要出典』と答える。";
+  const revise =
+    "上記で誤りを指摘したあと、" +
+    "「正しい所要時間」「正しい運賃」を反映したルート案内を、" +
+    "同じ JSON フォーマットで再出力してください。";
+  const list = criteria.join(', ');
+  return (
+    `${judge}\n${fact}\n評価基準: ${list}\n\n評価対象:\n${text}\n\n` +
+    `以下のJSON形式で回答してください。\n{\n  \"summary\": \"string\",\n  \"scores\": [{ \"criterion\": \"logic\", \"score\": 0, \"comment\": \"\" }]\n}` +
+    `\n\n${revise}`
+  );
+};
 // Geminiの返答からJSON部分だけ抽出するユーティリティ
 function extractJsonChunk(raw) {
   let s = raw.replace(/```json\s*/g, '').replace(/```/g, '').trim();
@@ -51,6 +63,15 @@ function extractJsonChunk(raw) {
   return chunk;
 }
 
+function sanitizeJson(chunk) {
+  let s = chunk;
+  const qc = (s.match(/"/g) || []).length;
+  if (qc % 2 !== 0) s += '"';
+  const ob = (s.match(/\{/g) || []).length;
+  const cb = (s.match(/\}/g) || []).length;
+  if (ob > cb) s += '}'.repeat(ob - cb);
+  return s;
+}
 app.post('/text/evaluate', async (req, res) => {
   const { text, criteria = ['logic', 'factuality', 'creativity'], model = 'gemini-2.5-flash' } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
@@ -60,7 +81,7 @@ app.post('/text/evaluate', async (req, res) => {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 500,
+      maxOutputTokens: 800,
       thinkingConfig: { thinkingBudget: 0 },
     },
   };
@@ -76,7 +97,7 @@ app.post('/text/evaluate', async (req, res) => {
     const data = await response.json();
     const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    const jsonChunk = extractJsonChunk(textResp);
+    let jsonChunk = extractJsonChunk(textResp);
     if (!jsonChunk) {
       console.error('Gemini response parse failed:', textResp);
       return res.status(500).json({
@@ -84,9 +105,19 @@ app.post('/text/evaluate', async (req, res) => {
         raw: textResp,
       });
     }
+    jsonChunk = sanitizeJson(jsonChunk);
 
-    const result = JSON.parse(jsonChunk);
-    res.json(result);
+    try {
+      const result = JSON.parse(jsonChunk);
+      res.json(result);
+    } catch (e) {
+      console.error('JSON parse error:', e, '\nchunk:\n', jsonChunk);
+      return res.status(500).json({
+        error: 'JSON parse error',
+        details: e.message,
+        raw: textResp,
+      });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to evaluate text' });
