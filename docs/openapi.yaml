@@ -43,32 +43,25 @@ components:
             type: string
       required:
         - text
-    Score:
-      type: object
-      properties:
-        criterion:
-          type: string
-          description: Criterion name
-        score:
-          type: number
-          description: Numeric score (0-10 scale)
-        comment:
-          type: string
-          nullable: true
-          description: Additional comments
-      required:
-        - criterion
-        - score
     EvaluateTextResponse:
       type: object
       properties:
-        summary:
+        correctness:
+          type: number
+          description: Correctness score (0-10)
+        sources:
+          type: array
+          description: List of reference URLs
+          items:
+            type: string
+        correction:
           type: string
           nullable: true
-          description: High-level summary
-        scores:
-          type: array
-          items:
-            $ref: '#/components/schemas/Score'
+          description: Corrected text
+        explanation:
+          type: string
+          nullable: true
+          description: Why the correction was needed
       required:
-        - scores
+        - correctness
+        - sources
