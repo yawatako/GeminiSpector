@@ -3,6 +3,7 @@ const express = require("express");
 const fetch = require("node-fetch");
 const { createLogger, format, transports } = require("winston");
 const { v4: uuid } = require("uuid");
+const { extractClaims, verifyClaim, generateReport } = require("./src/factcheck");
 
 const logger = createLogger({
   level: "info",
@@ -245,6 +246,24 @@ app.post("/revise-route", async (req, res, next) => {
     jsonChunk = sanitizeJson(jsonChunk);
     const result = JSON.parse(jsonChunk);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/factcheck", async (req, res, next) => {
+  const { date, time } = req.query;
+  if (!date || !time) {
+    return res.status(400).json({ error: "date and time required" });
+  }
+  try {
+    const prompt = `宇佐八幡から大分空港までのバス情報を教えてください。日付:${date} 時刻:${time}`;
+    const data = await callGemini(req, prompt, { maxTokens: 800, temperature: 0.3 });
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    const claims = extractClaims(text);
+    const verifications = await Promise.all(claims.map(c => verifyClaim(c)));
+    const report = generateReport(verifications);
+    res.json({ report, verifications });
   } catch (err) {
     next(err);
   }
