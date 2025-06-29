@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: GeminiSpector API
+  version: 1.0.0
+  description: |
+    API to evaluate text through Google Gemini. Returns structured scores.
+servers:
+  - url: https://geminispector.onrender.com
+paths:
+  /text/evaluate:
+    post:
+      summary: Evaluate text using Gemini
+      operationId: evaluateText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluateTextRequest'
+      responses:
+        '200':
+          description: Successful evaluation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluateTextResponse'
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    EvaluateTextRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Text to evaluate
+        criteria:
+          type: array
+          description: List of evaluation criteria
+          items:
+            type: string
+      required:
+        - text
+    Score:
+      type: object
+      properties:
+        criterion:
+          type: string
+          description: Criterion name
+        score:
+          type: number
+          description: Numeric score (0-10 scale)
+        comment:
+          type: string
+          nullable: true
+          description: Additional comments
+      required:
+        - criterion
+        - score
+    EvaluateTextResponse:
+      type: object
+      properties:
+        summary:
+          type: string
+          nullable: true
+          description: High-level summary
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/Score'
+      required:
+        - scores
