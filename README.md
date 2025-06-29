@@ -80,6 +80,9 @@ npm start
 ### APIエンドポイント
  - **POST /api/chat** : 三人格で応答を生成します。
  - **POST /factcheck** : 文章から主張を抽出し、Geminiで検証します。
+ - **POST /text/evaluate** : Geminiを利用して文章を採点し、必要に応じて訂正文も返します。
+
+`/text/evaluate` はまず correctness を採点し、点数が低い場合のみ訂正文を生成する二段階方式です。
 
 ---
 

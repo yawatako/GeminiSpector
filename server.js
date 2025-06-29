@@ -17,9 +17,47 @@ function logRequest(req, _res, next) {
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
+// ---- Gemini models & threshold ----
+const GEMINI_MODEL_SCORE = 'gemini-2.5-flash';
+const GEMINI_MODEL_FIX = 'gemini-2.5-flash';
+const SCORE_THRESHOLD = 8;
+
 function loadPrompt(filename) {
   const file = path.join(__dirname, 'prompts', filename);
   return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '';
+}
+
+// ---- Prompt builders ----
+function buildScorePrompt(text) {
+  return `採点基準: correctness, sources\nJSON だけ返せ: {"correctness":<0-10>,"sources":[<URL>…]}\n---\n${text}`;
+}
+
+function buildFixPrompt(text, scoreJson) {
+  return `次の文章は correctness ${scoreJson.correctness}/10 点でした。\nsources: ${scoreJson.sources.join(', ')}\n誤りを指摘し、正しい情報を盛り込んだ訂正文を作成してください。\nJSON だけ返せ:\n{"correctness":${scoreJson.correctness},"sources":[…],\n "correction":"…","explanation":"…"}\n---\n${text}`;
+}
+
+// ---- Common Gemini fetcher ----
+async function fetchGemini(model, prompt, maxTokens = 256) {
+  const payload = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: {
+      temperature: 0,
+      maxOutputTokens: maxTokens,
+      candidateCount: 1,
+      stopSequences: ['```']
+    }
+  };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error.message);
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const json = JSON.parse(raw.replace(/^```json\n?|```$/g, ''));
+  return json;
 }
 
 const personas = loadPrompt('personas.yaml');
@@ -72,40 +110,23 @@ app.post('/factcheck', async (req, res) => {
 app.post('/text/evaluate', logRequest, async (req, res) => {
   const { text, criteria } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
-  const list = Array.isArray(criteria) && criteria.length ? criteria.join(', ') : '総合';
-  const prompt = `以下の文章を次の評価基準で10点満点で採点し、JSON形式で回答してください。\n評価基準: ${list}\n文章:\n${text}`;
   try {
-    const payload = {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3 }
-    };
-    console.log('▼Gemini Request', JSON.stringify(payload).slice(0,300));
-    const resp = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    console.log('▲Gemini HTTP', resp.status, resp.statusText);
-    const data = await resp.json();
-    if (data.error) {
-      console.error(data.error);
-    } else {
-      console.log('▲Gemini OK', JSON.stringify(data));
+    // ① 採点モード
+    const scoreJson = await fetchGemini(GEMINI_MODEL_SCORE, buildScorePrompt(text));
+    // ② 判定
+    if (scoreJson.correctness >= SCORE_THRESHOLD) {
+      return res.json(scoreJson);
     }
-    if (data.error) {
-      console.error('Gemini API error:', JSON.stringify(data));
-      return res.status(500).json({ error: 'Gemini API error' });
-    }
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const jsonText = raw.match(/```json\n([\s\S]+?)```/)?.[1] ?? raw;
-    let result;
-    try {
-      result = JSON.parse(jsonText);
-    } catch {
-      result = { raw };
-    }
-    res.json(result);
+    // ③ 訂正文モード
+    const fixJson = await fetchGemini(
+      GEMINI_MODEL_FIX,
+      buildFixPrompt(text, scoreJson),
+      512
+    );
+    const merged = { ...scoreJson, ...fixJson };
+    res.json(merged);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Gemini API error', details: err.message });
   }
 });
