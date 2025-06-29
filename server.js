@@ -22,7 +22,7 @@ const GEMINI_MODEL_SCORE = 'gemini-2.5-flash';
 const GEMINI_MODEL_FIX = 'gemini-2.5-flash';
 const SCORE_THRESHOLD = 8;
 const MAX_TOKENS_SCORE = 512;
-const MAX_TOKENS_FIX = 1024;
+const MAX_TOKENS_FIX = 2048;
 
 function loadPrompt(filename) {
   const file = path.join(__dirname, 'prompts', filename);
@@ -31,15 +31,15 @@ function loadPrompt(filename) {
 
 // ---- Prompt builders ----
 function buildScorePrompt(text) {
-  return `採点基準: correctness, sources\nJSON だけ返せ: {"correctness":<0-10>,"sources":[<URL>…]}\n---\n${text}`;
+  return `採点基準: correctness, sources\nコメント一切禁止。JSONのみ: {"correctness":<0-10>,"sources":[<URL>…]}\n---\n${text}`;
 }
 
 function buildFixPrompt(text, scoreJson) {
-  return `次の文章は correctness ${scoreJson.correctness}/10 点でした。\nsources: ${scoreJson.sources.join(', ')}\n誤りを指摘し、正しい情報を盛り込んだ訂正文を作成してください。\nJSON だけ返せ:\n{"correctness":${scoreJson.correctness},"sources":[…],\n "correction":"…","explanation":"…"}\n---\n${text}`;
+  return `次の文章は correctness ${scoreJson.correctness}/10 点でした。\nsources: ${scoreJson.sources.join(', ')}\n誤りを指摘し、正しい情報を盛り込んだ訂正文を作成してください。\nコメント一切禁止。JSONのみ:\n{"correctness":${scoreJson.correctness},"sources":[…],\n "correction":"…","explanation":"…"}\n---\n${text}`;
 }
 
 // ---- Common Gemini fetcher ----
-async function fetchGemini(model, prompt, maxTokens = 256) {
+async function fetchGemini(model, prompt, maxTokens = 512) {
   const payload = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
