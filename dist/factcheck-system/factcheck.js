@@ -29,7 +29,7 @@ function extractClaims(text) {
  * Gemini API を用いて主張を検証
  */
 async function verifyClaim(claim) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey)
         throw new Error('GEMINI_API_KEY is not set');
@@ -50,7 +50,20 @@ async function verifyClaim(claim) {
         console.error('Gemini API error:', JSON.stringify(data));
         throw new Error('Gemini API error');
     }
-    const text = (_j = (_f = (_e = (_d = (_c = (_b = (_a = data.candidates) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.parts) === null || _d === void 0 ? void 0 : _d[0]) === null || _e === void 0 ? void 0 : _e.text) !== null && _f !== void 0 ? _f : (_h = (_g = data.candidates) === null || _g === void 0 ? void 0 : _g[0]) === null || _h === void 0 ? void 0 : _h.text) !== null && _j !== void 0 ? _j : '';
+    // 1️⃣ 候補が無い・空なら Safety ブロック扱いに
+    if (!data.candidates || !data.candidates.length) {
+        throw new Error('Gemini returned no candidates (possibly safety-blocked)');
+    }
+    // 2️⃣ finishReason を確認
+    const cand = data.candidates[0];
+    if (cand.finishReason && cand.finishReason !== 'STOP') {
+        throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+    }
+    // 3️⃣ 本文を取りに行く
+    const text = (_e = (_d = (_c = (_b = (_a = cand.content) === null || _a === void 0 ? void 0 : _a.parts) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) !== null && _d !== void 0 ? _d : cand.text) !== null && _e !== void 0 ? _e : '';
+    if (!text.trim()) {
+        throw new Error('Gemini returned empty text (safety-blocked or quota error)');
+    }
     const m = text.match(/\{[\s\S]*\}/);
     if (!m)
         throw new Error('No JSON found in Gemini response');

@@ -57,7 +57,24 @@ async function fetchGemini(model, prompt, maxTokens = 256) {
   });
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
-  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+  // 1️⃣ 候補が無い・空なら Safety ブロック扱いに
+  if (!data.candidates || !data.candidates.length) {
+    throw new Error('Gemini returned no candidates (possibly safety-blocked)');
+  }
+
+  // 2️⃣ finishReason を確認
+  const cand = data.candidates[0];
+  if (cand.finishReason && cand.finishReason !== 'STOP') {
+    throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+  }
+
+  // 3️⃣ 本文を取りに行く
+  const rawText = cand.content?.parts?.[0]?.text ?? '';
+  if (!rawText.trim()) {
+    throw new Error('Gemini returned empty text (safety-blocked or quota error)');
+  }
+
   const jsonLike = rawText.replace(/^```json\n?|\n?```$/g, '');
   console.log('▼RAW', rawText.slice(0,300));
   let json;
