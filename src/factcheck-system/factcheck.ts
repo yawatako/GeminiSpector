@@ -55,7 +55,12 @@ export async function verifyClaim(claim: Claim): Promise<Verification> {
   // 2️⃣ finishReason を確認
   const cand = data.candidates[0];
   if (cand.finishReason && cand.finishReason !== 'STOP') {
-    throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+    // MAX_TOKENS は正常終了として許容
+    if (cand.finishReason !== 'MAX_TOKENS') {
+      throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+    } else {
+      console.warn('Gemini output truncated (MAX_TOKENS)');
+    }
   }
 
   // 3️⃣ 本文を取りに行く
