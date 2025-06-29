@@ -11,6 +11,7 @@ app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_TEXT_URL = `https://generativelanguage.googleapis.com/v1beta2/models/gemini-pro:generateText?key=${GEMINI_API_KEY}`;
 
 function loadPrompt(filename) {
   const file = path.join(__dirname, 'prompts', filename);
@@ -53,6 +54,28 @@ app.post('/factcheck', async (req, res) => {
     res.json({ report, details: verifications });
   } catch (err) {
     res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/text/evaluate', async (req, res) => {
+  const { text, criteria } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+  const list = Array.isArray(criteria) && criteria.length ? criteria.join(', ') : '総合';
+  const prompt = `以下の文章を次の評価基準で10点満点で採点し、JSON形式で回答してください。\n評価基準: ${list}\n文章:\n${text}`;
+  try {
+    const payload = { prompt: { text: prompt }, temperature: 0.3 };
+    const resp = await fetch(GEMINI_TEXT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    const output = data.candidates?.[0]?.output || data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = output.match(/\{[\s\S]*\}/);
+    const result = match ? JSON.parse(match[0]) : { summary: null, scores: [] };
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Gemini API error', details: err.message });
   }
 });
 
