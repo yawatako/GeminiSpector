@@ -21,6 +21,8 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemi
 const GEMINI_MODEL_SCORE = 'gemini-2.5-flash';
 const GEMINI_MODEL_FIX = 'gemini-2.5-flash';
 const SCORE_THRESHOLD = 8;
+const MAX_TOKENS_SCORE = 512;
+const MAX_TOKENS_FIX = 1024;
 
 function loadPrompt(filename) {
   const file = path.join(__dirname, 'prompts', filename);
@@ -44,7 +46,7 @@ async function fetchGemini(model, prompt, maxTokens = 256) {
       temperature: 0,
       maxOutputTokens: maxTokens,
       candidateCount: 1,
-      stopSequences: ['```']
+      // stopSequences は一時的に解除
     }
   };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
@@ -55,8 +57,17 @@ async function fetchGemini(model, prompt, maxTokens = 256) {
   });
   const data = await r.json();
   if (data.error) throw new Error(data.error.message);
-  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  const json = JSON.parse(raw.replace(/^```json\n?|```$/g, ''));
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const jsonLike = rawText.replace(/^```json\n?|\n?```$/g, '');
+  console.log('▼RAW', rawText.slice(0,300));
+  let json;
+  try {
+    json = JSON.parse(jsonLike);
+  } catch (e) {
+    console.error('JSON parse fail', e.message);
+    console.error('BODY', jsonLike.slice(0,500));
+    throw e;
+  }
   return json;
 }
 
@@ -112,7 +123,11 @@ app.post('/text/evaluate', logRequest, async (req, res) => {
   if (!text) return res.status(400).json({ error: 'text required' });
   try {
     // ① 採点モード
-    const scoreJson = await fetchGemini(GEMINI_MODEL_SCORE, buildScorePrompt(text));
+    const scoreJson = await fetchGemini(
+      GEMINI_MODEL_SCORE,
+      buildScorePrompt(text),
+      MAX_TOKENS_SCORE
+    );
     // ② 判定
     if (scoreJson.correctness >= SCORE_THRESHOLD) {
       return res.json(scoreJson);
@@ -121,7 +136,7 @@ app.post('/text/evaluate', logRequest, async (req, res) => {
     const fixJson = await fetchGemini(
       GEMINI_MODEL_FIX,
       buildFixPrompt(text, scoreJson),
-      512
+      MAX_TOKENS_FIX
     );
     const merged = { ...scoreJson, ...fixJson };
     res.json(merged);
