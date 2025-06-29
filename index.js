@@ -91,21 +91,23 @@ function buildEvalPrompt(text, criteria) {
   const fact =
     "この文章の事実性を検証し、根拠を提示する。\n" +
     "根拠が無い場合は『要出典』と答える。";
+  const revise =
+    "上記で誤りを指摘したあと、" +
+    "「正しい所要時間」「正しい運賃」を反映したルート案内を、" +
+    "同じ JSON フォーマットで再出力してください。";
   const list = criteria.join(", ");
-  return `${judge}\n${fact}\n評価基準: ${list}\n\n評価対象:\n${text}\n\n` +
-    `以下のJSON形式で回答してください。\n{\n  "summary": "string",\n  "scores": [{ "criterion": "logic", "score": 0, "comment": "" }]\n}`;
+  return (
+    `${judge}\n${fact}\n評価基準: ${list}\n\n評価対象:\n${text}\n\n` +
+    `以下のJSON形式で回答してください。\n{\n  "summary": "string",\n  "scores": [{ "criterion": "logic", "score": 0, "comment": "" }]\n}` +
+    `\n\n${revise}`
+  );
 }
 
 // 出力からJSON部分だけを抜き出すユーティリティ
 function extractJsonChunk(raw) {
-  // ```json などのフェンスを除去
   let s = raw.replace(/```json\s*/g, "").replace(/```/g, "").trim();
-
-  // 最初の { の位置
   const start = s.indexOf("{");
   if (start < 0) return null;
-
-  // 深さカウントで対応する } を探す
   let depth = 0,
     end = -1;
   for (let i = start; i < s.length; i++) {
@@ -118,19 +120,19 @@ function extractJsonChunk(raw) {
       }
     }
   }
+  if (end < 0) return null;
+  // 末尾カンマ削除
+  return s.slice(start, end + 1).replace(/,(\s*[}\]])/g, "$1");
+}
 
-  // 閉じ括弧が不足している場合は補完
-  if (end < 0) {
-    end = s.length - 1;
-    while (depth-- > 0) s += "}";
-    end = s.length - 1;
-  }
-
-  let chunk = s.slice(start, end + 1);
-
-  // 末尾の余分なカンマを除去
-  chunk = chunk.replace(/,(\s*[}\]])/g, "$1");
-  return chunk;
+function sanitizeJson(chunk) {
+  let s = chunk;
+  const qc = (s.match(/"/g) || []).length;
+  if (qc % 2 !== 0) s += `"`;
+  const ob = (s.match(/\{/g) || []).length;
+  const cb = (s.match(/\}/g) || []).length;
+  if (ob > cb) s += "}".repeat(ob - cb);
+  return s;
 }
 
 app.post("/text/evaluate", async (req, res) => {
@@ -144,13 +146,15 @@ app.post("/text/evaluate", async (req, res) => {
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // JSON部分を抽出
-    const jsonChunk = extractJsonChunk(rawText);
+    let jsonChunk = extractJsonChunk(rawText);
     if (!jsonChunk) {
       console.error("JSON chunk not found:", rawText);
       return res
         .status(500)
         .json({ error: "JSON 部分が見つかりませんでした", raw: rawText });
     }
+
+    jsonChunk = sanitizeJson(jsonChunk);
 
     // パースして返却
     try {
@@ -162,6 +166,49 @@ app.post("/text/evaluate", async (req, res) => {
         .status(500)
         .json({ error: "JSON parse error", details: e.message, raw: rawText });
     }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/factcheck", async (req, res) => {
+  const { routeText } = req.body;
+  if (!routeText) return res.status(400).json({ error: "routeText required" });
+
+  const prompt = buildEvalPrompt(routeText, DEFAULT_CRITERIA);
+  try {
+    const data = await callGemini(prompt, { maxTokens: 800, temperature: 0.3 });
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    let jsonChunk = extractJsonChunk(rawText);
+    if (!jsonChunk) {
+      return res.status(500).json({ error: "JSON 部分が見つかりません", raw: rawText });
+    }
+    jsonChunk = sanitizeJson(jsonChunk);
+    const result = JSON.parse(jsonChunk);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/revise-route", async (req, res) => {
+  const { routeText, factcheck } = req.body;
+  if (!routeText || !factcheck) {
+    return res.status(400).json({ error: "routeText and factcheck required" });
+  }
+  const revisePrompt = `\n以下はルート説明と、その事実チェック結果です：\n---\nルート説明：\n${routeText}\n\nチェック結果：\n${JSON.stringify(factcheck, null, 2)}\n\n指摘された箇所を必ず正しい値で修正しつつ、全体を同じフォーマットのJSONで再生成してください。`;
+  try {
+    const data = await callGemini(revisePrompt, { maxTokens: 800, temperature: 0.3 });
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    let jsonChunk = extractJsonChunk(rawText);
+    if (!jsonChunk) {
+      return res.status(500).json({ error: "JSON 部分が見つかりません", raw: rawText });
+    }
+    jsonChunk = sanitizeJson(jsonChunk);
+    const result = JSON.parse(jsonChunk);
+    res.json(result);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
