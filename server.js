@@ -9,6 +9,11 @@ const { extractClaims, verifyClaim, generateReport } = require('./dist/factcheck
 const app = express();
 app.use(express.json());
 
+function logRequest(req, _res, next) {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`, req.body);
+  next();
+}
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -21,7 +26,7 @@ const personas = loadPrompt('personas.yaml');
 const rulesPrompt = loadPrompt('rules_prompt.md');
 const judgePrompt = loadPrompt('judge_prompt.md');
 
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', logRequest, async (req, res) => {
   const { message, evaluate } = req.body;
   if (!message) return res.status(400).json({ error: 'message required' });
 
@@ -30,12 +35,20 @@ app.post('/api/chat', async (req, res) => {
     const payload = { contents: [{ parts: [{ text: prompt }] }] };
     const resp = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await resp.json();
+    if (data.error) {
+      console.error('Gemini API error:', JSON.stringify(data));
+      return res.status(500).json({ error: 'Gemini API error' });
+    }
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
     if (!evaluate) return res.json({ reply });
 
     const evalPayload = { contents: [{ parts: [{ text: `${judgePrompt}\n${reply}` }] }], generationConfig: { temperature: 0.3 } };
     const evalResp = await fetch(GEMINI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(evalPayload) });
     const evalData = await evalResp.json();
+    if (evalData.error) {
+      console.error('Gemini API error:', JSON.stringify(evalData));
+      return res.status(500).json({ error: 'Gemini API error' });
+    }
     const evaluation = evalData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
     res.json({ reply, evaluation });
   } catch (err) {
@@ -56,7 +69,7 @@ app.post('/factcheck', async (req, res) => {
   }
 });
 
-app.post('/text/evaluate', async (req, res) => {
+app.post('/text/evaluate', logRequest, async (req, res) => {
   const { text, criteria } = req.body;
   if (!text) return res.status(400).json({ error: 'text required' });
   const list = Array.isArray(criteria) && criteria.length ? criteria.join(', ') : '総合';
@@ -72,6 +85,10 @@ app.post('/text/evaluate', async (req, res) => {
       body: JSON.stringify(payload)
     });
     const data = await resp.json();
+    if (data.error) {
+      console.error('Gemini API error:', JSON.stringify(data));
+      return res.status(500).json({ error: 'Gemini API error' });
+    }
     const output = data.candidates?.[0]?.output || data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const match = output.match(/\{[\s\S]*\}/);
     const result = match ? JSON.parse(match[0]) : { summary: null, scores: [] };
