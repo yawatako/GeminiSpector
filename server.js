@@ -88,17 +88,22 @@ app.post('/text/evaluate', logRequest, async (req, res) => {
     console.log('▲Gemini HTTP', resp.status, resp.statusText);
     const data = await resp.json();
     if (data.error) {
-      console.error('▲Gemini ERROR', data.error);
+      console.error(data.error);
     } else {
-      console.log('▲Gemini OK', JSON.stringify(data).slice(0,400));
+      console.log('▲Gemini OK', JSON.stringify(data));
     }
     if (data.error) {
       console.error('Gemini API error:', JSON.stringify(data));
       return res.status(500).json({ error: 'Gemini API error' });
     }
-    const output = data.candidates?.[0]?.output || data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    const match = output.match(/\{[\s\S]*\}/);
-    const result = match ? JSON.parse(match[0]) : { summary: null, scores: [] };
+    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const jsonText = raw.match(/```json\n([\s\S]+?)```/)?.[1] ?? raw;
+    let result;
+    try {
+      result = JSON.parse(jsonText);
+    } catch {
+      result = { raw };
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Gemini API error', details: err.message });
