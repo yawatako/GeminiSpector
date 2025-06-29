@@ -29,15 +29,14 @@ function extractClaims(text) {
  * Gemini API を用いて主張を検証
  */
 async function verifyClaim(claim) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey)
         throw new Error('GEMINI_API_KEY is not set');
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${apiKey}`;
     const prompt = `以下の主張が正しいか調べ、JSONで回答してください。公式サイトや複数ソースを優先して検索し、根拠となるURLと抜粋を示してください。\n主張: ${claim.subject} ${claim.predicate}${claim.object ? ' ' + claim.object : ''}`;
     const body = {
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        tools: [{ type: 'searchWeb' }, { type: 'fetchPage' }]
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
     };
     const res = await (0, node_fetch_1.default)(url, {
         method: 'POST',
@@ -47,7 +46,7 @@ async function verifyClaim(claim) {
     if (!res.ok)
         throw new Error(`Gemini API error: ${res.status}`);
     const data = await res.json();
-    const text = ((_e = (_d = (_c = (_b = (_a = data.candidates) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.parts) === null || _d === void 0 ? void 0 : _d[0]) === null || _e === void 0 ? void 0 : _e.text) || '';
+    const text = (_j = (_f = (_e = (_d = (_c = (_b = (_a = data.candidates) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.parts) === null || _d === void 0 ? void 0 : _d[0]) === null || _e === void 0 ? void 0 : _e.text) !== null && _f !== void 0 ? _f : (_h = (_g = data.candidates) === null || _g === void 0 ? void 0 : _g[0]) === null || _h === void 0 ? void 0 : _h.text) !== null && _j !== void 0 ? _j : '';
     const m = text.match(/\{[\s\S]*\}/);
     if (!m)
         throw new Error('No JSON found in Gemini response');

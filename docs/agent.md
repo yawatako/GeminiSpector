@@ -33,8 +33,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:ge
   "contents": [{ "parts": [{ "text": "<evaluation_prompt>" }] }],
   "generationConfig": {
     "maxOutputTokens": 500,
-    "temperature": 0.3,
-    "thinkingConfig": { "thinkingBudget": 0 }
+    "temperature": 0.3
   }
 }
 ```
