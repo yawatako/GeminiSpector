@@ -22,7 +22,7 @@
 
 ---
 
--## ⚙️ 技術構成
+## ⚙️ 技術構成
 
 - **Google Gemini API (2.5 Flash)**（応答生成・評価）
 - **Render.com**（インフラ・デプロイ）
@@ -39,8 +39,8 @@
 │   ├── factcheck_prompt.md
 │   └── personas.yaml
 ├── src/
-│   ├── main-app/         # 三人格生成ロジック
-│   └── gemini-agent/     # 評価API呼び出し
+│   └── factcheck-system/ # Gemini API を使ったファクトチェック
+├── dist/                 # TypeScript ビルド成果物
 ├── docs/
 │   └── agent.md
 ├── .env.example
@@ -78,8 +78,8 @@ npm start
 - 結果をユーザーに通知・表示
 
 ### APIエンドポイント
- - **POST /generate** : 指定した`prompt`からテキストを生成します。
- - **POST /text/evaluate** : 文章を指定の観点で評価します。
+ - **POST /api/chat** : 三人格で応答を生成します。
+ - **POST /factcheck** : 文章から主張を抽出し、Geminiで検証します。
 
 ---
 
