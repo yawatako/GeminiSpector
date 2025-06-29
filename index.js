@@ -1,8 +1,23 @@
 require("dotenv").config();
 const express = require("express");
 const fetch = require("node-fetch");
+const { createLogger, format, transports } = require("winston");
+const { v4: uuid } = require("uuid");
+
+const logger = createLogger({
+  level: "info",
+  format: format.combine(format.timestamp(), format.json()),
+  transports: [new transports.Console(), new transports.File({ filename: "app.log" })]
+});
+
 const app = express();
 app.use(express.json());
+
+app.use((req, res, next) => {
+  req.id = uuid();
+  req.logger = logger.child({ reqId: req.id });
+  next();
+});
 
 /* ====== 1. 定数まわり ====== */
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -14,7 +29,7 @@ const GEMINI_URL =
   `?key=${GEMINI_API_KEY}`;
 
 /* ====== 2. 共通呼び出し関数 ====== */
-async function callGemini(prompt, { maxTokens, temperature } = {}) {
+async function callGemini(req, prompt, { maxTokens, temperature } = {}) {
   const body = {
     contents: [
       {
@@ -29,40 +44,42 @@ async function callGemini(prompt, { maxTokens, temperature } = {}) {
   if (maxTokens   !== undefined) body.generationConfig.maxOutputTokens = maxTokens;
   if (temperature !== undefined) body.generationConfig.temperature     = temperature;
 
+  req.logger.info("Gemini request", { model: MODEL, promptLen: prompt.length });
   const res = await fetch(GEMINI_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
   });
-
-  console.log("[Gemini] status =", res.status);
+  req.logger.info("Gemini response status", { status: res.status });
   if (!res.ok) throw new Error(await res.text());
 
   const data = await res.json();
-  console.log("[Gemini] raw response =", JSON.stringify(data, null, 2));
+  req.logger.info("Gemini response", {
+    status: res.status,
+    finishReason: data.candidates?.[0]?.finishReason,
+    usage: data.usageMetadata
+  });
   const fin = data.candidates?.[0]?.finishReason;
   if (fin === "MAX_TOKENS") {
-    console.warn(
-      "[Gemini] response truncated by MAX_TOKENS; consider increasing maxTokens"
-    );
+    req.logger.warn("Response truncated", { maxTokens });
   }
   return data;
 }
 
 /* ====== 3. /generate エンドポイント ====== */
-app.post("/generate", async (req, res) => {
+app.post("/generate", async (req, res, next) => {
   try {
     const { prompt, max_tokens, temperature } = req.body;
     if (!prompt) return res.status(400).json({ error: "prompt required" });
 
-    const data = await callGemini(prompt, {
+    const data = await callGemini(req, prompt, {
       maxTokens:   max_tokens,
       temperature: temperature
     });
 
     // candidates がなければエラー
     if (!data.candidates?.length) {
-      console.error("Invalid Gemini response:", data);
+      req.logger.error("Invalid Gemini response", { raw: data });
       return res
         .status(500)
         .json({ error: "Invalid Gemini response: no candidates", raw: data });
@@ -75,8 +92,7 @@ app.post("/generate", async (req, res) => {
 
     res.json({ text, raw: data });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
@@ -135,20 +151,20 @@ function sanitizeJson(chunk) {
   return s;
 }
 
-app.post("/text/evaluate", async (req, res) => {
+app.post("/text/evaluate", async (req, res, next) => {
   const { text, criteria = DEFAULT_CRITERIA } = req.body;
   if (!text) return res.status(400).json({ error: "text required" });
 
   const prompt = buildEvalPrompt(text, criteria);
   try {
     // MAX_TOKENS で切られないように余裕を持って 800 トークンに
-    const data = await callGemini(prompt, { maxTokens: 800, temperature: 0.3 });
+    const data = await callGemini(req, prompt, { maxTokens: 800, temperature: 0.3 });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // JSON部分を抽出
     let jsonChunk = extractJsonChunk(rawText);
     if (!jsonChunk) {
-      console.error("JSON chunk not found:", rawText);
+      req.logger.error("JSON chunk not found", { raw: rawText });
       return res
         .status(500)
         .json({ error: "JSON 部分が見つかりませんでした", raw: rawText });
@@ -161,24 +177,23 @@ app.post("/text/evaluate", async (req, res) => {
       const result = JSON.parse(jsonChunk);
       return res.json(result);
     } catch (e) {
-      console.error("JSON parse error:", e, "\nchunk:\n", jsonChunk);
+      req.logger.error("JSON parse error", { err: e.message, chunk: jsonChunk });
       return res
         .status(500)
         .json({ error: "JSON parse error", details: e.message, raw: rawText });
     }
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-app.post("/factcheck", async (req, res) => {
+app.post("/factcheck", async (req, res, next) => {
   const { routeText } = req.body;
   if (!routeText) return res.status(400).json({ error: "routeText required" });
 
   const prompt = buildEvalPrompt(routeText, DEFAULT_CRITERIA);
   try {
-    const data = await callGemini(prompt, { maxTokens: 800, temperature: 0.3 });
+    const data = await callGemini(req, prompt, { maxTokens: 800, temperature: 0.3 });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     let jsonChunk = extractJsonChunk(rawText);
     if (!jsonChunk) {
@@ -188,19 +203,18 @@ app.post("/factcheck", async (req, res) => {
     const result = JSON.parse(jsonChunk);
     res.json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
 });
 
-app.post("/revise-route", async (req, res) => {
+app.post("/revise-route", async (req, res, next) => {
   const { routeText, factcheck } = req.body;
   if (!routeText || !factcheck) {
     return res.status(400).json({ error: "routeText and factcheck required" });
   }
   const revisePrompt = `\n以下はルート説明と、その事実チェック結果です：\n---\nルート説明：\n${routeText}\n\nチェック結果：\n${JSON.stringify(factcheck, null, 2)}\n\n指摘された箇所を必ず正しい値で修正しつつ、全体を同じフォーマットのJSONで再生成してください。`;
   try {
-    const data = await callGemini(revisePrompt, { maxTokens: 800, temperature: 0.3 });
+    const data = await callGemini(req, revisePrompt, { maxTokens: 800, temperature: 0.3 });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     let jsonChunk = extractJsonChunk(rawText);
     if (!jsonChunk) {
@@ -210,11 +224,16 @@ app.post("/revise-route", async (req, res) => {
     const result = JSON.parse(jsonChunk);
     res.json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    next(err);
   }
+});
+
+// エラーハンドリング
+app.use((err, req, res, next) => {
+  req.logger.error("Unhandled error", { stack: err.stack });
+  res.status(500).json({ error: "Internal server error", reqId: req.id });
 });
 
 /* ====== 5. 起動 ====== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => logger.info("Server running", { port: PORT }));
