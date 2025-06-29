@@ -57,7 +57,13 @@ async function verifyClaim(claim) {
     // 2️⃣ finishReason を確認
     const cand = data.candidates[0];
     if (cand.finishReason && cand.finishReason !== 'STOP') {
-        throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+        // MAX_TOKENS は正常終了として許容
+        if (cand.finishReason !== 'MAX_TOKENS') {
+            throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+        }
+        else {
+            console.warn('Gemini output truncated (MAX_TOKENS)');
+        }
     }
     // 3️⃣ 本文を取りに行く
     const text = (_e = (_d = (_c = (_b = (_a = cand.content) === null || _a === void 0 ? void 0 : _a.parts) === null || _b === void 0 ? void 0 : _b[0]) === null || _c === void 0 ? void 0 : _c.text) !== null && _d !== void 0 ? _d : cand.text) !== null && _e !== void 0 ? _e : '';
