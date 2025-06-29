@@ -79,12 +79,19 @@ app.post('/text/evaluate', logRequest, async (req, res) => {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.3 }
     };
+    console.log('▼Gemini Request', JSON.stringify(payload).slice(0,300));
     const resp = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    console.log('▲Gemini HTTP', resp.status, resp.statusText);
     const data = await resp.json();
+    if (data.error) {
+      console.error('▲Gemini ERROR', data.error);
+    } else {
+      console.log('▲Gemini OK', JSON.stringify(data).slice(0,400));
+    }
     if (data.error) {
       console.error('Gemini API error:', JSON.stringify(data));
       return res.status(500).json({ error: 'Gemini API error' });
