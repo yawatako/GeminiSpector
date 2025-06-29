@@ -46,10 +46,27 @@ export async function verifyClaim(claim: Claim): Promise<Verification> {
     console.error('Gemini API error:', JSON.stringify(data));
     throw new Error('Gemini API error');
   }
+
+  // 1️⃣ 候補が無い・空なら Safety ブロック扱いに
+  if (!data.candidates || !data.candidates.length) {
+    throw new Error('Gemini returned no candidates (possibly safety-blocked)');
+  }
+
+  // 2️⃣ finishReason を確認
+  const cand = data.candidates[0];
+  if (cand.finishReason && cand.finishReason !== 'STOP') {
+    throw new Error(`Gemini finishReason=${cand.finishReason} (safety?)`);
+  }
+
+  // 3️⃣ 本文を取りに行く
   const text =
-    data.candidates?.[0]?.content?.parts?.[0]?.text ??
-    data.candidates?.[0]?.text ??
+    cand.content?.parts?.[0]?.text ??
+    cand.text ??
     '';
+  if (!text.trim()) {
+    throw new Error('Gemini returned empty text (safety-blocked or quota error)');
+  }
+
   const m = text.match(/\{[\s\S]*\}/);
   if (!m) throw new Error('No JSON found in Gemini response');
   const result = JSON.parse(m[0]) as Verification;
