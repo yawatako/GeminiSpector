@@ -66,6 +66,25 @@ async function callGemini(req, prompt, { maxTokens, temperature } = {}) {
   return data;
 }
 
+// callGemini をラップして、MAX_TOKENS に達したら段階的に再試行
+async function callGeminiWithRetry(req, prompt, opts = {}) {
+  let { maxTokens = 800, temperature } = opts;
+  let data;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    data = await callGemini(req, prompt, { maxTokens, temperature });
+    const reason = data.candidates?.[0]?.finishReason;
+    if (reason !== "MAX_TOKENS") {
+      return data;
+    }
+    req.logger.warn("Response truncated, retrying with more tokens", {
+      attempt: attempt + 1,
+      prevMaxTokens: maxTokens,
+    });
+    maxTokens = Math.min(maxTokens * 2, 4096);
+  }
+  return data;
+}
+
 /* ====== 3. /generate エンドポイント ====== */
 app.post("/generate", async (req, res, next) => {
   try {
@@ -157,8 +176,11 @@ app.post("/text/evaluate", async (req, res, next) => {
 
   const prompt = buildEvalPrompt(text, criteria);
   try {
-    // MAX_TOKENS で切られないように余裕を持って 800 トークンに
-    const data = await callGemini(req, prompt, { maxTokens: 800, temperature: 0.3 });
+    // MAX_TOKENS で切られた場合は自動でトークン数を増やして再試行
+    const data = await callGeminiWithRetry(req, prompt, {
+      maxTokens: 800,
+      temperature: 0.3
+    });
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     // JSON部分を抽出
